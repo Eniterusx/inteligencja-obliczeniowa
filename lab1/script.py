@@ -1,5 +1,6 @@
 from easyAI import TwoPlayerGame, Human_Player, AI_Player, Negamax, solve_with_iterative_deepening
 import random
+from tqdm import tqdm
 
 class Nim(TwoPlayerGame):
     def __init__(self, players, piles = [5, 5, 5, 5], deterministic = False):
@@ -37,18 +38,82 @@ class Nim(TwoPlayerGame):
 
     def ttentry(self): return tuple(self.piles) #optional, speeds up AI
     
+def launch_game_negamax(depth_1: int,
+                depth_2: int,
+                deterministic: bool,
+                piles: list = [5, 5, 5, 5]):
+    
+    ai = Negamax(depth_1)
+    ai2 = Negamax(depth_2)
+    # game = Nim([AI_Player(ai), AI_Player(ai2)], deterministic=deterministic)
+    game = Nim(players=[AI_Player(ai), AI_Player(ai2)],
+               deterministic=deterministic,
+               piles=piles)
+    game.play() # You will always lose this game !
+    print("\nplayer %d wins\n" % game.current_player)    
+    x = game.current_player
+    return x
+
+
 
 if __name__ == "__main__":
     # w, d, m = solve_with_iterative_deepening(Nim, range(5, 20), win_score = 80)
-    ai = Negamax(10, win_score=100)
-    ai2 = Negamax(4, win_score=100)
-    # game = Nim([Human_Player(), AI_Player(ai)])
-    game = Nim([AI_Player(ai), AI_Player(ai2)])
-    game.play() # You will always lose this game !
-    print("\nplayer %d wins\n" % game.current_player)
+    # launch_game_negamax(10, 4, False)
+    # ai = Negamax(10)
+    # ai2 = Negamax(10)
+    # # game = Nim([Human_Player(), AI_Player(ai)])
+    # game = Nim([AI_Player(ai), AI_Player(ai2)])
+    # x = game.play() # You will always lose this game !
+    # print("\nplayer %d wins\n" % game.current_player)
+    # print(x)
 
+    # Win tracking dict
+    results = {}
+
+    depths = [3, 10]
+    deterministic = [True, False]
+    game_amount = 10
+
+    for d1, d2 in tqdm([(d1, d2) for d1 in depths for d2 in depths], desc="Processing depths"):
+        for det in tqdm(deterministic, desc="Processing deterministic"):
+            # print(f"depth1: {d1}, depth2: {d2} deterministic: {det}")
+            
+            # Play 10 games and track the results
+            p1_wins = 0
+            p2_wins = 0
+            p1_avg_time = 0
+            p2_avg_time = 0
+
+            for x in tqdm(range(game_amount), desc="Playing games"):
+                ai = Negamax(d1)
+                ai2 = Negamax(d2)
+                game = Nim(players=[AI_Player(ai), AI_Player(ai2)],
+                        deterministic=det,
+                        piles=[5,5,5,5])
+                p1_time, p2_time = game.play(verbose=False)
+                p1_avg_time += p1_time
+                p2_avg_time += p2_time
+                print("\nplayer %d wins\n" % game.current_player)
+                if game.current_player == 1:
+                    p1_wins += 1
+                else:
+                    p2_wins += 1 
+
+            p1_avg_time /= game_amount
+            p2_avg_time /= game_amount
+            results[(d1, d2, det)] = {"p1_wins": p1_wins,
+                                      "p2_wins": p2_wins,
+                                      "p1_average_game_time": p1_avg_time,
+                                      "p2_average_game_time": p2_avg_time} # Update the results
+
+    print(results)
 
 # 10% szansy na wziecie jednego mniej w make_final_move.
 # Rozdzielenie na make_final_move i make_move. make_final_move zawsze wykonywane jako ostatnie. make_move wykonywane jest przy przeszukiwaniu.
 # Pomiar czasu przeszukiwania (ask_move)
-# 
+# game.play() zwraca sredni czas na ruch obu graczy
+
+
+
+# TODO: dodac zapisywanie rezultatow do pliku, nazwa pliku to nazwa uzytego algorytmu (albo walic, sam se przekopiuje)
+# jakis expecti-minmax obsrany zrobic
