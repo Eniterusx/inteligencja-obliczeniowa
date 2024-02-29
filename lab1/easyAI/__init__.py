@@ -12,7 +12,8 @@ __all__ = [
     "DUAL",
     "HashTranspositionTable",
     "DictTranspositionTable",
-    "NegamaxNoPruning"
+    "NegamaxNoPruning",
+    "Expectiminimax"
 ]
 
 from .TwoPlayerGame import TwoPlayerGame
@@ -28,5 +29,6 @@ from .AI import (
     DUAL,
     HashTranspositionTable,
     DictTranspositionTable,
-    NegamaxNoPruning
+    NegamaxNoPruning,
+    Expectiminimax
 )

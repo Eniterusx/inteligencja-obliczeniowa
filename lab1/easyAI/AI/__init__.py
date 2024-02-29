@@ -7,3 +7,4 @@ from .SSS import SSS
 from .DUAL import DUAL
 from .HashTranspositionTable import HashTranspositionTable
 from .NegamaxNoPruning import NegamaxNoPruning
+from .Expectiminimax import Expectiminimax
