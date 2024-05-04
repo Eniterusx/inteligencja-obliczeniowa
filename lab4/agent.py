@@ -42,7 +42,7 @@ class Agent:
         nearby_bullets = Utils.check_nearby_bullets(game.game_state.tank1, game.game_state.bullets)
         reload_time = 1 if game.game_state.tank1.reload_time > 0 else 0
         state = bot_location + rotation + nearby_objects + nearby_bullets + [reload_time]
-        # print(state)
+        print(state)
         return np.array(state, dtype=int)
 
 
@@ -77,7 +77,6 @@ class Agent:
             prediction = self.model(state0) # this calls the forward function from Linear_Qnet
             move = torch.argmax(prediction).item()
             final_move[move] = 1
-        print(final_move)
         return final_move
 
 def train():
@@ -86,7 +85,7 @@ def train():
     total_score = 0
     record = 0
     agent = Agent()
-    game = TankGame("lab4/survival.txt", FPS=60000000)
+    game = TankGame("lab4/survival.txt", FPS=60000)
     while True:
         # get old state
         state_old = agent.get_state(game)

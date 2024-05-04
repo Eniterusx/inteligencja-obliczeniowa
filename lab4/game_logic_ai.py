@@ -468,17 +468,26 @@ class TankGame:
         reward = 0
         handle_key_presses_AI(self.game_state, action)
         is_over, took_damage, points = self.game_state.game_tick(self.game_state)
+        # generalna idea rewarda:
+        # jak dostajesz dmg to tracisz duzo
+        # jak zabijasz przeciwnika to dostajesz 10
+        # jak nie zabijasz srednio 1 przeciwnika co 1500 klatek to przegrywasz (-100)
+        # jak strzelasz wtedy, gdy skonczysz przeladowywanie, to +1 point
+        # jak strzelasz wtedy, gdy przeladowujesz, to -5 punktow
+        # te 2 powyzej maja go zachecic do strzelania, bo obecnie za cholere nie chce strzelac >:(
         if took_damage:
-            reward -= 5
+            reward -= 50
             if is_over:
                 return reward, is_over, self.game_state.points
         if points > 0:
-            reward += 1
+            reward += 10
         if self.frame_iteration > 1500*(self.game_state.points+1):
-            reward -= 10
+            reward -= 100
             return reward, True, self.game_state.points
         if action[4] == 1 and 0 < self.game_state.tank1.reload_time < 79:
-            reward -= 1
+            reward -= 5
+        elif action[4] == 1 and self.game_state.tank1.reload_time == 79:
+            reward += 1
         if self.human_mode:
             self.game_state.draw(self.screen, self.game_state)
             pygame.display.flip()
