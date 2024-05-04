@@ -77,6 +77,7 @@ class Agent:
             prediction = self.model(state0) # this calls the forward function from Linear_Qnet
             move = torch.argmax(prediction).item()
             final_move[move] = 1
+        print(final_move)
         return final_move
 
 def train():
