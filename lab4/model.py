@@ -3,7 +3,25 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import os
+import random
+from collections import namedtuple, deque
 
+Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward', 'done'))
+
+class ReplayMemory:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.memory = deque(maxlen=capacity)
+
+    def push(self, *args):
+        """Save a transition."""
+        self.memory.append(Transition(*args))
+
+    def sample(self, batch_size):
+        return random.sample(self.memory, batch_size)
+
+    def __len__(self):
+        return len(self.memory)
 
 class Linear_QNet(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -11,14 +29,14 @@ class Linear_QNet(nn.Module):
         self.qnet = nn.Sequential(
             nn.Linear(input_size, hidden_size),
             nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
             nn.Linear(hidden_size, output_size)
         )
 
-    
     def forward(self, x):
         x = self.qnet(x)
         return x
-    
 
     def save(self, file_name='model.pth'):
         model_folder_path = './model'
@@ -28,47 +46,45 @@ class Linear_QNet(nn.Module):
         file_name = os.path.join(model_folder_path, file_name)
         torch.save(self.state_dict(), file_name)
 
-    
 class QTrainer:
-    def __init__(self, model, lr, gamma):
+    def __init__(self, model, target_model, lr, gamma, batch_size, memory_capacity):
         self.lr = lr
         self.gamma = gamma
         self.model = model
+        self.target_model = target_model
         self.optimizer = optim.Adam(model.parameters(), lr=self.lr)
-        self.criterion = nn.MSELoss()
+        self.criterion = nn.SmoothL1Loss()  # Huber loss
+        self.memory = ReplayMemory(memory_capacity)
+        self.batch_size = batch_size
 
-
-    def train_step(self, state, action, reward, next_state, done):
-        state = torch.tensor(state, dtype=torch.float)
-        action = torch.tensor(action, dtype=torch.float)
-        reward = torch.tensor(reward, dtype=torch.float)
-        next_state = torch.tensor(next_state, dtype=torch.float)
+    def train_step(self):
+        if len(self.memory) < self.batch_size:
+            return
         
-        if len(state.shape) == 1:
-            state = torch.unsqueeze(state, 0)
-            action = torch.unsqueeze(action, 0)
-            reward = torch.unsqueeze(reward, 0)
-            next_state = torch.unsqueeze(next_state, 0)
-            done = (done, )
+        transitions = self.memory.sample(self.batch_size)
+        batch = Transition(*zip(*transitions))
 
-        # 1: predicted Q values with current state
-        pred = self.model(state) # this calls model.forward()
+        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), dtype=torch.bool)
+        non_final_next_states = torch.stack([s for s in batch.next_state if s is not None])
 
-        target = pred.clone()
-        for idx in range(len(done)):
-            Q_new = reward[idx]
-            if not done[idx]:
-                Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx]))
+        state_batch = torch.stack(batch.state)
+        action_batch = torch.stack(batch.action)
+        reward_batch = torch.stack(batch.reward)
+        
+        state_action_values = self.model(state_batch).gather(1, action_batch)
 
-            target[idx][torch.argmax(action).item()] = Q_new
+        next_state_values = torch.zeros(self.batch_size)
+        next_state_values[non_final_mask] = self.target_model(non_final_next_states).max(1)[0].detach()
+        expected_state_action_values = reward_batch + (self.gamma * next_state_values)
 
-        # 2: Q_new = r + y * max(next_predicted Q value) -> only do this if not done
-        # pred.clone()
-        # preds[argmax(action)] = Q_new
+        loss = self.criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+
         self.optimizer.zero_grad()
-        loss = self.criterion(target, pred)
         loss.backward()
-
         self.optimizer.step()
 
-        
+    def update_target_network(self):
+        self.target_model.load_state_dict(self.model.state_dict())
+
+    def push_to_memory(self, state, action, next_state, reward, done):
+        self.memory.push(state, action, next_state, reward, done)

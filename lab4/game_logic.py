@@ -377,7 +377,7 @@ pygame.init() # intialize the library
 
 
 # Create the map
-init_map, tank1, obj2 = Utils.init_map("survival.txt")
+init_map, tank1, obj2 = Utils.init_map("lab4/survival.txt")
 screen = pygame.display.set_mode([MAP_SIZE_X, MAP_SIZE_Y])
 
 if isinstance(obj2, Tank):

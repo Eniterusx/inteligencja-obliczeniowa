@@ -22,7 +22,12 @@ class Direction(Enum):
 class Utils:
     def init_map(map_name):
         # open txt file with map
-        # read character by character, if the character is "#" then create an obstacle, if it is "-" then do nothing, if it is "1" then create a tank 1, if it is "2" then create a tank 2, if it is "\n" then go to the next line
+        # read character by character, if the character is "#" then create an obstacle
+        # if it is "-" then do nothing
+        # if it is "1" then create a tank 1
+        # if it is "2" then create a tank 2
+        # if it is "3" then create a tank bot spawner
+        # if it is "\n" then go to the next line
         # return the list of obstacles
 
         with open(map_name, 'r') as file:
@@ -93,6 +98,16 @@ class Utils:
                 nearby_objects[3] = 1
         return nearby_objects
     
+    def find_closest_bot(game_state):
+        closest_bot = None
+        closest_distance = 10000
+        for bot in game_state.tank_bots:
+            distance = Utils.get_distance(game_state.tank1, bot)
+            if distance < closest_distance:
+                closest_distance = distance
+                closest_bot = bot
+        return closest_bot
+
     def check_nearby_bullets(tank, bullets):
         rect_up = pygame.Rect(tank.x, tank.y - BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
         rect_2_up = pygame.Rect(tank.x, tank.y - 2*BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
@@ -103,16 +118,22 @@ class Utils:
         rect_right = pygame.Rect(tank.x + BLOCK_SIZE, tank.y, BLOCK_SIZE, BLOCK_SIZE)
         rect_2_right = pygame.Rect(tank.x + 2*BLOCK_SIZE, tank.y, BLOCK_SIZE, BLOCK_SIZE)
 
-        nearby_bullets = [0, 0, 0, 0]
+        nearby_bullets = [10, 10, 10, 10]
         for bullet in bullets:
             if rect_up.colliderect(bullet.rect) or rect_2_up.colliderect(bullet.rect):
-                nearby_bullets[0] = 1
+                distance = abs(tank.y-bullet.y)
+                nearby_bullets[0] = distance if nearby_bullets[0] > distance > 0 else nearby_bullets[0]
             if rect_down.colliderect(bullet.rect) or rect_2_down.colliderect(bullet.rect):
-                nearby_bullets[1] = 1
+                distance = abs(tank.y-bullet.y)
+                nearby_bullets[1] = distance if nearby_bullets[1] > distance > 0 else nearby_bullets[1]
             if rect_left.colliderect(bullet.rect) or rect_2_left.colliderect(bullet.rect):
-                nearby_bullets[2] = 1
+                distance = abs(tank.x-bullet.x)
+                nearby_bullets[2] = distance if nearby_bullets[2] > distance > 0 else nearby_bullets[2]
             if rect_right.colliderect(bullet.rect) or rect_2_right.colliderect(bullet.rect):
-                nearby_bullets[3] = 1
+                distance = abs(tank.x-bullet.x)
+                nearby_bullets[3] = distance if nearby_bullets[3] > distance > 0 else nearby_bullets[3]
+        for i in range(4):
+            nearby_bullets[i] = -100 if nearby_bullets[i] == 10000 else nearby_bullets[i]
         return nearby_bullets
 
     def get_distance(object1, object2):
@@ -292,7 +313,6 @@ class Tank:
             i = 2
         else:
             i = 3
-        # pygame.draw.rect(screen, self.color, (self.x, self.y, BLOCK_SIZE, BLOCK_SIZE))
         match self.direction:
             case Direction.LEFT.value:
                 img = pygame.image.load(f"lab4/assets/tank{i}_90.png")
@@ -341,7 +361,7 @@ class TankBot(Tank):
         # it just works, don't ask me how
         bullet_x = self.x + (BLOCK_SIZE ) // 2 - BULLET_SIZE // 2 + self.direction[0]//PIXEL_SIZE * BLOCK_SIZE
         bullet_y = self.y + (BLOCK_SIZE) // 2 - BULLET_SIZE // 2 + self.direction[1]//PIXEL_SIZE * BLOCK_SIZE
-        game_state.bullets.append(Bullet(bullet_x, bullet_y, self.direction, is_from_bot=True))
+        game_state.bullets.append(Bullet(bullet_x, bullet_y, self.direction, is_from_bot=True, velocity=0.2))
 
     def decrease_cooldown(self):
         if self.move_cooldown > 0:
@@ -401,27 +421,22 @@ class Obstacle:
 def handle_key_presses(game_state: State):
     keys = pygame.key.get_pressed()
     if keys[pygame.K_w]:
-        game_state.tank1.move(Direction.UP)
+        game_state.tank1.move(Direction.UP, game_state)
     elif keys[pygame.K_s]:
-        game_state.tank1.move(Direction.DOWN)
+        game_state.tank1.move(Direction.DOWN, game_state)
     elif keys[pygame.K_a]:
-        game_state.tank1.move(Direction.LEFT)
+        game_state.tank1.move(Direction.LEFT, game_state)
     elif keys[pygame.K_d]:
-        game_state.tank1.move(Direction.RIGHT)
+        game_state.tank1.move(Direction.RIGHT, game_state)
     if keys[pygame.K_SPACE]:
-        game_state.tank1.shoot()
-
-    if game_state.tank2 is not None:
-        if keys[pygame.K_UP]:
-            game_state.tank2.move(Direction.UP)
-        elif keys[pygame.K_DOWN]:
-            game_state.tank2.move(Direction.DOWN)
-        elif keys[pygame.K_LEFT]:
-            game_state.tank2.move(Direction.LEFT)
-        elif keys[pygame.K_RIGHT]:
-            game_state.tank2.move(Direction.RIGHT)
-        if keys[pygame.K_RCTRL]:
-            game_state.tank2.shoot()
+        game_state.tank1.shoot(game_state)
+        closest_bot = Utils.find_closest_bot(game_state)
+        if game_state.tank1.direction == Direction.UP.value and closest_bot.y > game_state.tank1.y and abs(closest_bot.x - game_state.tank1.x) < 25 \
+            or game_state.tank1.direction == Direction.DOWN.value and closest_bot.y < game_state.tank1.y and abs(closest_bot.x - game_state.tank1.x) < 25 \
+            or game_state.tank1.direction == Direction.LEFT.value and closest_bot.x < game_state.tank1.x and abs(closest_bot.y - game_state.tank1.y) < 25 \
+            or game_state.tank1.direction == Direction.RIGHT.value and closest_bot.x > game_state.tank1.x and abs(closest_bot.y - game_state.tank1.y) < 25:
+            return 3
+    return 0
 
 def handle_key_presses_AI(game_state: State, action):
     if action[0] == 1:
@@ -434,6 +449,13 @@ def handle_key_presses_AI(game_state: State, action):
         game_state.tank1.move(Direction.RIGHT, game_state)
     if action[4] == 1:
         game_state.tank1.shoot(game_state)
+        closest_bot = Utils.find_closest_bot(game_state)
+        if game_state.tank1.direction == Direction.UP.value and closest_bot.y > game_state.tank1.y and abs(closest_bot.x - game_state.tank1.x) < 25 \
+            or game_state.tank1.direction == Direction.DOWN.value and closest_bot.y < game_state.tank1.y and abs(closest_bot.x - game_state.tank1.x) < 25 \
+            or game_state.tank1.direction == Direction.LEFT.value and closest_bot.x < game_state.tank1.x and abs(closest_bot.y - game_state.tank1.y) < 25 \
+            or game_state.tank1.direction == Direction.RIGHT.value and closest_bot.x > game_state.tank1.x and abs(closest_bot.y - game_state.tank1.y) < 25:
+            return 3
+    return 0
 
 class TankGame:
     def __init__(self, map_name, FPS=60):
@@ -443,11 +465,14 @@ class TankGame:
         self.screen = pygame.display.set_mode([MAP_SIZE_X, MAP_SIZE_Y])
         self.clock = pygame.time.Clock()
         self.FPS = FPS
+        self.init_FPS = FPS
         self.frame_iteration = 0
         self.cooldown = 0
         self.human_mode = True
+        self.good_shoots = 0
 
     def reset(self):
+        self.good_shoots = 0
         init_map, tank1, spawners = Utils.init_map(self.map_name)
         self.game_state = State(tank1, init_map, spawners=spawners)
         self.frame_iteration = 0
@@ -462,32 +487,34 @@ class TankGame:
         keys = pygame.key.get_pressed()
         if keys[pygame.K_h] and self.cooldown == 0:
             self.human_mode = not self.human_mode
-            self.cooldown = 10
+            self.cooldown = 100
+        if keys[pygame.K_f] and self.cooldown == 0:
+            self.FPS = 5 if self.FPS == self.init_FPS else self.init_FPS
+            print(f"FPS: {self.FPS}, init FPS: {self.init_FPS}, bool: {self.FPS == self.init_FPS}")
+            self.cooldown = 100
         if self.cooldown > 0:
             self.cooldown -= 1
         reward = 0
-        handle_key_presses_AI(self.game_state, action)
+        shoot_points = handle_key_presses_AI(self.game_state, action)
         is_over, took_damage, points = self.game_state.game_tick(self.game_state)
-        # generalna idea rewarda:
-        # jak dostajesz dmg to tracisz duzo
-        # jak zabijasz przeciwnika to dostajesz 10
-        # jak nie zabijasz srednio 1 przeciwnika co 1500 klatek to przegrywasz (-100)
-        # jak strzelasz wtedy, gdy skonczysz przeladowywanie, to +1 point
-        # jak strzelasz wtedy, gdy przeladowujesz, to -5 punktow
-        # te 2 powyzej maja go zachecic do strzelania, bo obecnie za cholere nie chce strzelac >:(
+        # nagroda za trafianie przeciwników i strzelanie, gdy czas przeładowania jest równy 0
+        # kara za otrzymanie obrażeń i strzelanie, gdy czas przeładowania jest różny od 0 (niepotrzebne strzały)
         if took_damage:
             reward -= 50
             if is_over:
                 return reward, is_over, self.game_state.points
         if points > 0:
-            reward += 10
+            reward += 20
         if self.frame_iteration > 1500*(self.game_state.points+1):
             reward -= 100
             return reward, True, self.game_state.points
         if action[4] == 1 and 0 < self.game_state.tank1.reload_time < 79:
-            reward -= 5
+            reward -= 1
         elif action[4] == 1 and self.game_state.tank1.reload_time == 79:
-            reward += 1
+            reward += 3
+        reward += shoot_points
+        if shoot_points > 0:
+            self.good_shoots += 1
         if self.human_mode:
             self.game_state.draw(self.screen, self.game_state)
             pygame.display.flip()
